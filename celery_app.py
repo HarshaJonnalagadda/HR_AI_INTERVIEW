@@ -51,20 +51,21 @@ celery_app.conf.task_routes = {
 
 # --- Celery Beat Periodic Task Schedule ---
 # Defines a schedule for tasks that should run automatically at set intervals.
-celery_app.conf.beat_schedule = {
-    "sync-calendar-events": {
-        "task": "services.calendar_service.sync_calendar_events",
-        "schedule": 300.0,  # Every 5 minutes
-    },
-    "cleanup-expired-tokens": {
-        "task": "core.security.cleanup_expired_tokens",
-        "schedule": 3600.0,  # Every hour
-    },
-    "generate-daily-reports": {
-        "task": "services.analytics_service.generate_daily_reports",
-        "schedule": 86400.0,  # Daily at midnight UTC
-    },
-}
+# Commented out until tasks are implemented to prevent beat startup errors
+# celery_app.conf.beat_schedule = {
+#     "sync-calendar-events": {
+#         "task": "services.calendar_service.sync_calendar_events",
+#         "schedule": 300.0,  # Every 5 minutes
+#     },
+#     "cleanup-expired-tokens": {
+#         "task": "core.security.cleanup_expired_tokens",
+#         "schedule": 3600.0,  # Every hour
+#     },
+#     "generate-daily-reports": {
+#         "task": "services.analytics_service.generate_daily_reports",
+#         "schedule": 86400.0,  # Daily at midnight UTC
+#     },
+# }
 
 # Note: The `if __name__ == "__main__":` block is generally not needed
 # when running Celery with the standard CLI commands, as you are doing
