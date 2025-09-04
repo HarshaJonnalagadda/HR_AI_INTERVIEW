@@ -1,0 +1,57 @@
+# Dependency directory
+node_modules
+
+# Git folder
+.git
+
+# Build output
+build
+dist
+
+# Local environment variables
+.env
+.env.local
+
+# Log files
+npm-debug.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode
+.idea
+
+# Test coverage
+coverage
+
+# Temporary files
+*.tmp
+*.temp
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# Docker
+docker-compose.local.yml
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# IDEs and editors
+.idea/
+.vscode/
+*.swp

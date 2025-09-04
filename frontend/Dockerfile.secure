@@ -1,0 +1,62 @@
+# Optimized multi-stage build with security focus
+FROM node:20-bookworm-slim AS build
+
+# Install security updates and build dependencies
+RUN apt-get update && apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# Create non-root user
+RUN groupadd -r nodejs && useradd -r -g nodejs nodejs
+
+WORKDIR /app
+
+# Copy package files with proper ownership
+COPY --chown=nodejs:nodejs package*.json ./
+
+# Switch to non-root user for npm operations
+USER nodejs
+
+# Install dependencies with security flags
+RUN npm ci --only=production --ignore-scripts --no-audit --no-fund && \
+    npm cache clean --force
+
+# Copy source code
+COPY --chown=nodejs:nodejs . .
+
+# Build the application
+RUN npm run build
+
+# Production stage with secure nginx
+FROM nginx:1.25.4-bookworm-slim
+
+# Install security updates
+RUN apt-get update && apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        wget \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# Create required directories
+RUN mkdir -p /var/cache/nginx /var/log/nginx /var/run
+
+# Copy built application
+COPY --from=build --chown=nginx:nginx /app/build /usr/share/nginx/html
+
+# Copy nginx configuration
+COPY --chown=nginx:nginx nginx.conf /etc/nginx/conf.d/default.conf
+
+# Set proper permissions
+RUN chown -R nginx:nginx /var/cache/nginx /var/log/nginx /var/run && \
+    chmod -R 755 /usr/share/nginx/html
+
+# Switch to non-root user
+USER nginx
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:80/health || exit 1
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

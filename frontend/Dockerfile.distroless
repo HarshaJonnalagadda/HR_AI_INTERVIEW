@@ -1,0 +1,60 @@
+# ---- Build Stage ----
+# Use a stable, lightweight Alpine image for building the Node.js application.
+FROM node:20-alpine AS build
+
+# Create a dedicated, non-root user for security.
+# Using fixed IDs (e.g., 1001) is a good practice for predictable permissions.
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nextjs -u 1001 -G nodejs
+
+# Set the working directory inside the container.
+WORKDIR /app
+
+# Set ownership of the working directory to the non-root user.
+# This is crucial to allow 'npm' to write to this folder.
+RUN chown -R nextjs:nodejs /app
+
+# Copy package configuration files first to leverage Docker's layer caching.
+# This step only re-runs if package.json or package-lock.json changes.
+COPY --chown=nextjs:nodejs package*.json ./
+
+# Switch to the non-root user for all subsequent commands.
+USER nextjs
+
+# Use 'npm install' to handle package-lock.json sync issues in development
+RUN npm install
+
+# Copy the rest of the application source code.
+COPY --chown=nextjs:nodejs . .
+
+# Build the production-ready static files.
+RUN npm run build
+
+
+# ---- Final Stage ----
+# Use the stable nginx:1-alpine tag, which is minimal and receives security updates.
+FROM nginx:1-alpine
+
+# CRITICAL FIX: The official Nginx image runs as a non-root 'nginx' user.
+# That user needs permission to write to the cache directory. This command
+# creates the directory and sets the correct ownership to prevent the
+# "Permission denied" error on startup.
+RUN mkdir -p /var/cache/nginx && \
+    chown -R nginx:nginx /var/cache/nginx
+
+# Copy only the built static files from the 'build' stage.
+# Set ownership to the 'nginx' user for security.
+COPY --from=build --chown=nginx:nginx /app/build /usr/share/nginx/html
+
+# Copy your custom Nginx configuration file.
+COPY --chown=nginx:nginx nginx.conf /etc/nginx/conf.d/default.conf
+
+# Switch to the non-root 'nginx' user. The container will run as this user.
+USER nginx
+
+# Expose port 80 to allow traffic to Nginx.
+EXPOSE 80
+
+# The default command for the nginx image is to start the server in the foreground.
+# This is the correct way to run Nginx in a container.
+CMD ["nginx", "-g", "daemon off;"]

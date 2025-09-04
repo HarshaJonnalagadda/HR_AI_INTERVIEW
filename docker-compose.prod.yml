@@ -1,0 +1,117 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: hr_ai_db
+      POSTGRES_USER: harsha
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U harsha -d hr_ai_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis Cache (External - Running on Ubuntu host)
+  # redis:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6379:6379"
+  #   restart: unless-stopped
+  #   command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+  #   volumes:
+  #     - redis_data:/data
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://harsha:${POSTGRES_PASSWORD}@postgres:5432/hr_ai_db
+      - REDIS_URL=redis://host.docker.internal:6379/0
+      - ENVIRONMENT=production
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+    healthcheck:
+      # IMPROVEMENT: This check is more robust as it verifies a successful HTTP 200 response.
+      test: ["CMD", "python", "-c", "import urllib.request; exit(0) if urllib.request.urlopen('http://localhost:8000/health').getcode() == 200 else exit(1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Celery Worker
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A celery_app.celery_app worker --loglevel=info --concurrency=4
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://harsha:${POSTGRES_PASSWORD}@postgres:5432/hr_ai_db
+      - REDIS_URL=redis://host.docker.internal:6379/0
+      - ENVIRONMENT=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+
+  # Celery Beat (Scheduler)
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A celery_app.celery_app beat --loglevel=info --schedule=/app/celery_beat_data/celerybeat-schedule
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://harsha:${POSTGRES_PASSWORD}@postgres:5432/hr_ai_db
+      - REDIS_URL=redis://host.docker.internal:6379/0
+      - ENVIRONMENT=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+      - celery_beat_data:/app/celery_beat_data
+    # CRITICAL FIX: Removed 'working_dir' which would prevent Celery from finding your app module.
+
+  # React Frontend with Nginx
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.distroless
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    environment:
+      - REACT_APP_API_URL=http://localhost/api
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+  celery_beat_data:
