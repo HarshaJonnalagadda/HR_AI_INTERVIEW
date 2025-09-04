@@ -18,34 +18,39 @@ services:
       timeout: 10s
       retries: 3
 
-  # Redis Cache (External - Running on Ubuntu host)
-  # redis:
-  #   image: redis:7-alpine
-  #   ports:
-  #     - "6379:6379"
-  #   restart: unless-stopped
-  #   command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
-  #   volumes:
-  #     - redis_data:/data
-  #   healthcheck:
-  #     test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # FastAPI Backend
   backend:
     build:
       context: .
       dockerfile: Dockerfile
+    env_file: []
     environment:
       - DATABASE_URL=postgresql+asyncpg://harsha:${POSTGRES_PASSWORD}@postgres:5432/hr_ai_db
-      - REDIS_URL=redis://host.docker.internal:6379/0
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
       - ENVIRONMENT=production
+      - ALLOWED_HOSTS=["http://localhost", "http://127.0.0.1"]
     ports:
       - "8000:8000"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: unless-stopped
     volumes:
@@ -63,12 +68,16 @@ services:
       context: .
       dockerfile: Dockerfile
     command: celery -A celery_app.celery_app worker --loglevel=info --concurrency=4
+    env_file: []
     environment:
       - DATABASE_URL=postgresql+asyncpg://harsha:${POSTGRES_PASSWORD}@postgres:5432/hr_ai_db
-      - REDIS_URL=redis://host.docker.internal:6379/0
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
       - ENVIRONMENT=production
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: unless-stopped
     volumes:
@@ -85,12 +94,16 @@ services:
       context: .
       dockerfile: Dockerfile
     command: celery -A celery_app.celery_app beat --loglevel=info --schedule=/app/celery_beat_data/celerybeat-schedule
+    env_file: []
     environment:
       - DATABASE_URL=postgresql+asyncpg://harsha:${POSTGRES_PASSWORD}@postgres:5432/hr_ai_db
-      - REDIS_URL=redis://host.docker.internal:6379/0
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
       - ENVIRONMENT=production
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: unless-stopped
     volumes:
@@ -109,8 +122,6 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
-    environment:
-      - REACT_APP_API_URL=http://localhost/api
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/health"]
       interval: 30s
@@ -119,4 +130,5 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
   celery_beat_data:

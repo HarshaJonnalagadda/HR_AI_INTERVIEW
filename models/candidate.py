@@ -53,6 +53,7 @@ class Candidate(Base):
     
     # Relationships
     job = relationship("Job", back_populates="candidates")
+    interviews = relationship('Interview', back_populates='candidate', cascade='all, delete-orphan')
     
     @property
     def full_name(self):

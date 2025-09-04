@@ -104,9 +104,20 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:3000"
     BACKEND_URL: str = "http://localhost:8000"
     
-    model_config = {
-        "env_file": ".env",
-        "case_sensitive": True
-    }
+    # Environment-specific settings
+    ENVIRONMENT: str = "development"
 
-settings = Settings()
+    class Config:
+        env_file = ".env"
+        case_sensitive = True
+
+# Conditionally load .env file only in development
+if os.getenv("ENVIRONMENT") == "production":
+    # In production, rely solely on environment variables
+    class ProdSettings(Settings):
+        class Config:
+            env_file = None
+    settings = ProdSettings()
+else:
+    # In development, load from .env file
+    settings = Settings()

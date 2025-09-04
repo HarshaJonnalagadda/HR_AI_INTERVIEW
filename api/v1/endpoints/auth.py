@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPBearer
+from fastapi.security import HTTPBearer, OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from datetime import timedelta
@@ -7,7 +7,7 @@ from datetime import timedelta
 from core.database import get_db
 from core.security import create_access_token, get_current_user_id
 from models.user import User
-from schemas.auth import UserLogin, UserRegister, UserResponse, Token
+from schemas.auth import UserRegister, UserResponse, Token
 from schemas.user import UserCreate, UserUpdate
 
 router = APIRouter()
@@ -15,18 +15,18 @@ security = HTTPBearer()
 
 @router.post("/login", response_model=Token)
 async def login(
-    user_credentials: UserLogin,
+    form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db)
 ):
     """Authenticate user and return JWT token"""
     
     # Find user by email
     result = await db.execute(
-        select(User).where(User.email == user_credentials.email)
+        select(User).where(User.email == form_data.username)
     )
     user = result.scalar_one_or_none()
     
-    if not user or not user.check_password(user_credentials.password):
+    if not user or not user.check_password(form_data.password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials"

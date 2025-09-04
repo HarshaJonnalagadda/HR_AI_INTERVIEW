@@ -57,6 +57,9 @@ class Interview(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # ORM Relationships
+    interviewer = relationship('User', back_populates='assigned_interviews')
+    job = relationship('Job', back_populates='interviews')
+    candidate = relationship('Candidate', back_populates='interviews')
     feedback = relationship('Feedback', backref='interview', lazy=True, cascade='all, delete-orphan')
     
     @property

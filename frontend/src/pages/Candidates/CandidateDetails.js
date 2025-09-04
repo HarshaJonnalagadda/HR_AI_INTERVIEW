@@ -45,7 +45,7 @@ const mockCandidate = {
   id: 1,
   name: 'John Doe',
   email: 'john.doe@email.com',
-  phone: '+91 9876543210',
+  phone: '+91 9431937998',
   location: 'Bangalore, India',
   experience: '6 years',
   currentRole: 'Senior Developer',

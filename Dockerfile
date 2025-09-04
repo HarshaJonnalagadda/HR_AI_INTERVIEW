@@ -40,9 +40,9 @@ COPY --from=builder /opt/venv /opt/venv
 # Copy application code with correct permissions
 COPY --chown=appuser:appuser . .
 
-# Create uploads directory and set permissions
-RUN mkdir -p uploads \
-    && chown -R appuser:appuser /app/uploads
+# Create necessary directories and set permissions
+RUN mkdir -p uploads /app/celery_beat_data \
+    && chown -R appuser:appuser /app/uploads /app/celery_beat_data
 
 # Switch to the non-root user
 USER appuser
