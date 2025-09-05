@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { jobService } from '../../services/jobService';
 import {
   Box,
   Typography,
@@ -28,68 +29,32 @@ import {
   Visibility as ViewIcon,
 } from '@mui/icons-material';
 
-// Mock data for jobs
-const mockJobs = [
-  {
-    id: 1,
-    title: 'Senior Full Stack Developer',
-    company: 'TechCorp India',
-    location: 'Bangalore, India',
-    type: 'Full-time',
-    salary: '₹15-25 LPA',
-    status: 'active',
-    applicants: 24,
-    posted: '2 days ago',
-    description: 'Looking for an experienced full stack developer with React and Node.js expertise.',
-    requirements: ['React.js', 'Node.js', 'MongoDB', '5+ years experience'],
-  },
-  {
-    id: 2,
-    title: 'Product Manager',
-    company: 'StartupXYZ',
-    location: 'Mumbai, India',
-    type: 'Full-time',
-    salary: '₹20-30 LPA',
-    status: 'active',
-    applicants: 18,
-    posted: '5 days ago',
-    description: 'Seeking a product manager to lead our mobile app development initiatives.',
-    requirements: ['Product Management', 'Agile', 'Mobile Apps', '3+ years experience'],
-  },
-  {
-    id: 3,
-    title: 'UI/UX Designer',
-    company: 'DesignStudio',
-    location: 'Delhi, India',
-    type: 'Contract',
-    salary: '₹8-12 LPA',
-    status: 'paused',
-    applicants: 31,
-    posted: '1 week ago',
-    description: 'Creative UI/UX designer needed for e-commerce platform redesign.',
-    requirements: ['Figma', 'Adobe Creative Suite', 'User Research', '2+ years experience'],
-  },
-  {
-    id: 4,
-    title: 'Data Scientist',
-    company: 'AI Solutions Ltd',
-    location: 'Hyderabad, India',
-    type: 'Full-time',
-    salary: '₹18-28 LPA',
-    status: 'active',
-    applicants: 12,
-    posted: '3 days ago',
-    description: 'Data scientist role focusing on machine learning and predictive analytics.',
-    requirements: ['Python', 'Machine Learning', 'SQL', 'Statistics', '4+ years experience'],
-  },
-];
-
 const Jobs = () => {
   const navigate = useNavigate();
-  const [jobs, setJobs] = useState(mockJobs);
+  const [jobs, setJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedJob, setSelectedJob] = useState(null);
+
+  useEffect(() => {
+    const fetchJobs = async () => {
+      try {
+        setLoading(true);
+        const response = await jobService.getJobs();
+        setJobs(response.data);
+        setError(null);
+      } catch (err) {
+        setError('Failed to fetch jobs. Please try again later.');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchJobs();
+  }, []);
 
   const handleMenuOpen = (event, job) => {
     setAnchorEl(event.currentTarget);
@@ -115,9 +80,15 @@ const Jobs = () => {
     handleMenuClose();
   };
 
-  const handleDeleteJob = () => {
+  const handleDeleteJob = async () => {
     if (selectedJob) {
-      setJobs(jobs.filter(job => job.id !== selectedJob.id));
+      try {
+        await jobService.deleteJob(selectedJob.id);
+        setJobs(jobs.filter(job => job.id !== selectedJob.id));
+      } catch (err) {
+        console.error('Failed to delete job:', err);
+        // Optionally, show an error message to the user
+      }
     }
     handleMenuClose();
   };
@@ -137,8 +108,7 @@ const Jobs = () => {
 
   const filteredJobs = jobs.filter(job =>
     job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    job.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    job.location.toLowerCase().includes(searchTerm.toLowerCase())
+    (job.location && job.location.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   return (
@@ -232,13 +202,13 @@ const Jobs = () => {
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                     <MoneyIcon sx={{ fontSize: 16, mr: 1, color: 'text.secondary' }} />
                     <Typography variant="body2" color="text.secondary">
-                      {job.salary}
+                      {job.salary_min && job.salary_max ? `${job.salary_min} - ${job.salary_max} ${job.currency}` : 'Not specified'}
                     </Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                     <PeopleIcon sx={{ fontSize: 16, mr: 1, color: 'text.secondary' }} />
                     <Typography variant="body2" color="text.secondary">
-                      {job.applicants} applicants
+                      {job.candidate_count} applicants
                     </Typography>
                   </Box>
                 </Box>
@@ -251,7 +221,7 @@ const Jobs = () => {
                     size="small"
                   />
                   <Chip
-                    label={job.type}
+                    label={job.employment_type}
                     variant="outlined"
                     size="small"
                   />
@@ -262,35 +232,10 @@ const Jobs = () => {
                   {job.description}
                 </Typography>
 
-                {/* Requirements */}
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="caption" color="text.secondary" gutterBottom>
-                    Key Requirements:
-                  </Typography>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
-                    {job.requirements.slice(0, 3).map((req, index) => (
-                      <Chip
-                        key={index}
-                        label={req}
-                        size="small"
-                        variant="outlined"
-                        sx={{ fontSize: '0.7rem' }}
-                      />
-                    ))}
-                    {job.requirements.length > 3 && (
-                      <Chip
-                        label={`+${job.requirements.length - 3} more`}
-                        size="small"
-                        variant="outlined"
-                        sx={{ fontSize: '0.7rem' }}
-                      />
-                    )}
-                  </Box>
-                </Box>
 
                 {/* Posted Date */}
                 <Typography variant="caption" color="text.secondary">
-                  Posted {job.posted}
+                  Posted {new Date(job.created_at).toLocaleDateString()}
                 </Typography>
               </CardContent>
             </Card>
@@ -298,8 +243,12 @@ const Jobs = () => {
         ))}
       </Grid>
 
+      {/* Loading and Error States */}
+      {loading && <Typography>Loading jobs...</Typography>}
+      {error && <Typography color="error">{error}</Typography>}
+
       {/* Empty State */}
-      {filteredJobs.length === 0 && (
+      {!loading && !error && filteredJobs.length === 0 && (
         <Box sx={{ textAlign: 'center', py: 8 }}>
           <WorkIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
           <Typography variant="h6" color="text.secondary" gutterBottom>

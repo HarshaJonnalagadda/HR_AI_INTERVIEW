@@ -53,7 +53,7 @@ async def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depend
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
         )
-    return user_id
+    return int(user_id)
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
     """Get current user from JWT token"""

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 from typing import List, Optional
 
 from core.database import get_db
@@ -26,7 +27,7 @@ async def get_jobs(
 ):
     """Get all jobs with filtering and pagination"""
     
-    query = select(Job)
+    query = select(Job).options(selectinload(Job.candidates))
     
     if status:
         query = query.where(Job.status == status)
@@ -38,16 +39,10 @@ async def get_jobs(
     result = await db.execute(query)
     jobs = result.scalars().all()
     
-    # Get candidate counts for each job
     job_responses = []
     for job in jobs:
-        candidate_count_result = await db.execute(
-            select(func.count(Candidate.id)).where(Candidate.job_id == job.id)
-        )
-        candidate_count = candidate_count_result.scalar()
-        
         job_dict = job.to_dict()
-        job_dict['candidate_count'] = candidate_count
+        job_dict['candidate_count'] = len(job.candidates)
         job_responses.append(JobResponse(**job_dict))
     
     return job_responses
@@ -63,7 +58,17 @@ async def create_job(
     try:
         # Create job instance
         job = Job(
-            **job_data.dict(),
+            title=job_data.title,
+            description=job_data.description,
+            requirements=job_data.requirements,
+            department=job_data.department,
+            location=job_data.location,
+            employment_type=job_data.employment_type,
+            experience_level=job_data.experience_level,
+            salary_min=job_data.salary_min,
+            salary_max=job_data.salary_max,
+            currency=job_data.currency,
+            priority=job_data.priority,
             created_by=current_user_id
         )
         
@@ -74,13 +79,19 @@ async def create_job(
             job_data.requirements or ""
         )
         
+        # Assign AI analysis results to trigger setters
         job.parsed_skills_list = analysis.get('skills', [])
         job.ai_confidence_score = analysis.get('confidence_score', 0.0)
         job.matching_keywords_list = analysis.get('keywords', [])
         
         db.add(job)
         await db.commit()
-        await db.refresh(job)
+
+        # Eagerly load the relationship to prevent lazy-loading issues
+        result = await db.execute(
+            select(Job).options(selectinload(Job.creator)).where(Job.id == job.id)
+        )
+        job = result.scalar_one()
         
         job_dict = job.to_dict()
         job_dict['candidate_count'] = 0
@@ -103,7 +114,9 @@ async def get_job(
 ):
     """Get a specific job by ID"""
     
-    result = await db.execute(select(Job).where(Job.id == job_id))
+    result = await db.execute(
+        select(Job).options(selectinload(Job.candidates)).where(Job.id == job_id)
+    )
     job = result.scalar_one_or_none()
     
     if not job:
@@ -112,14 +125,8 @@ async def get_job(
             detail="Job not found"
         )
     
-    # Get candidate count
-    candidate_count_result = await db.execute(
-        select(func.count(Candidate.id)).where(Candidate.job_id == job_id)
-    )
-    candidate_count = candidate_count_result.scalar()
-    
     job_dict = job.to_dict()
-    job_dict['candidate_count'] = candidate_count
+    job_dict['candidate_count'] = len(job.candidates)
     
     return JobResponse(**job_dict)
 
@@ -160,16 +167,15 @@ async def update_job(
             job.matching_keywords_list = analysis.get('keywords', [])
         
         await db.commit()
-        await db.refresh(job)
-        
-        # Get candidate count
-        candidate_count_result = await db.execute(
-            select(func.count(Candidate.id)).where(Candidate.job_id == job_id)
+
+        # Eagerly load relationships to prevent lazy-loading issues
+        result = await db.execute(
+            select(Job).options(selectinload(Job.creator), selectinload(Job.candidates)).where(Job.id == job.id)
         )
-        candidate_count = candidate_count_result.scalar()
-        
+        job = result.scalar_one()
+
         job_dict = job.to_dict()
-        job_dict['candidate_count'] = candidate_count
+        job_dict['candidate_count'] = len(job.candidates)
         
         return JobResponse(**job_dict)
         

@@ -86,8 +86,7 @@ class Job(Base):
             'created_by': self.created_by,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
-            'deadline': self.deadline.isoformat() if self.deadline else None,
-            'candidate_count': len(self.candidates) if self.candidates else 0
+            'deadline': self.deadline.isoformat() if self.deadline else None
         }
     
     def __repr__(self):

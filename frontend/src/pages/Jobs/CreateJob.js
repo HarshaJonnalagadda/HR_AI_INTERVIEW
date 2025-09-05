@@ -25,15 +25,15 @@ import {
   Preview as PreviewIcon,
 } from '@mui/icons-material';
 import { useForm, Controller } from 'react-hook-form';
+import { jobService } from '../../services/jobService';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import toast from 'react-hot-toast';
 
 const schema = yup.object({
   title: yup.string().required('Job title is required'),
-  company: yup.string().required('Company name is required'),
   location: yup.string().required('Location is required'),
-  type: yup.string().required('Job type is required'),
+  employment_type: yup.string().required('Job type is required'),
   salary_min: yup.number().positive('Minimum salary must be positive').required('Minimum salary is required'),
   salary_max: yup.number().positive('Maximum salary must be positive').required('Maximum salary is required'),
   description: yup.string().min(50, 'Description must be at least 50 characters').required('Job description is required'),
@@ -63,9 +63,8 @@ const CreateJob = () => {
     resolver: yupResolver(schema),
     defaultValues: {
       title: '',
-      company: '',
       location: '',
-      type: '',
+      employment_type: '',
       department: '',
       experience_level: '',
       salary_min: '',
@@ -100,19 +99,25 @@ const CreateJob = () => {
     setValue('requirements', newRequirements);
   };
 
+  const onInvalid = (errors) => {
+    console.error('Form validation failed:', errors);
+    toast.error('Please fill all required fields correctly.');
+  };
+
   const onSubmit = async (data) => {
     setLoading(true);
+    const payload = {
+      ...data,
+      requirements: data.requirements.join('\n'),
+    };
+
     try {
-      // Here you would typically make an API call to create the job
-      console.log('Creating job:', { ...data, requirements });
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      await jobService.createJob(payload);
       toast.success('Job created successfully!');
       navigate('/jobs');
     } catch (error) {
-      toast.error('Failed to create job');
+      console.error('Failed to create job:', error);
+      toast.error(error.response?.data?.detail || 'Failed to create job. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -140,21 +145,6 @@ const CreateJob = () => {
             </Grid>
             <Grid item xs={12} md={6}>
               <Controller
-                name="company"
-                control={control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    fullWidth
-                    label="Company"
-                    error={!!errors.company}
-                    helperText={errors.company?.message}
-                  />
-                )}
-              />
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Controller
                 name="location"
                 control={control}
                 render={({ field }) => (
@@ -170,10 +160,10 @@ const CreateJob = () => {
             </Grid>
             <Grid item xs={12} md={6}>
               <Controller
-                name="type"
+                name="employment_type"
                 control={control}
                 render={({ field }) => (
-                  <FormControl fullWidth error={!!errors.type}>
+                  <FormControl fullWidth error={!!errors.employment_type}>
                     <InputLabel>Job Type</InputLabel>
                     <Select {...field} label="Job Type">
                       {jobTypes.map((type) => (
@@ -354,10 +344,10 @@ const CreateJob = () => {
                   {watchedValues.title}
                 </Typography>
                 <Typography variant="subtitle1" color="text.secondary" gutterBottom>
-                  {watchedValues.company} • {watchedValues.location}
+                  {watchedValues.location}
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                  <Chip label={watchedValues.type} color="primary" size="small" />
+                  <Chip label={watchedValues.employment_type} color="primary" size="small" />
                   <Chip label={watchedValues.department} variant="outlined" size="small" />
                   <Chip label={watchedValues.experience_level} variant="outlined" size="small" />
                 </Box>
@@ -430,7 +420,7 @@ const CreateJob = () => {
       {/* Form */}
       <Card>
         <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)}>
+          <form onSubmit={handleSubmit(onSubmit, onInvalid)}>
             {renderStepContent(activeStep)}
 
             {/* Navigation Buttons */}
@@ -456,7 +446,7 @@ const CreateJob = () => {
                     variant="contained"
                     onClick={handleNext}
                     disabled={
-                      (activeStep === 0 && (!watchedValues.title || !watchedValues.company || !watchedValues.location || !watchedValues.type)) ||
+                      (activeStep === 0 && (!watchedValues.title || !watchedValues.location || !watchedValues.employment_type)) ||
                       (activeStep === 1 && (!watchedValues.description || !watchedValues.salary_min || !watchedValues.salary_max)) ||
                       (activeStep === 2 && requirements.length === 0)
                     }
